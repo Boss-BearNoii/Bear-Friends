@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ตัวติดตามสถานะงานทำคอนเทนต์</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { color-scheme: light; }
+    body { font-family: "Noto Sans Thai", system-ui, -apple-system, Segoe UI, Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Apple Color Emoji', 'Segoe UI Emoji'; }
+  </style>
+  <!-- React / ReactDOM / Babel (for JSX in this single file) -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="bg-gray-50">
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useEffect, useMemo, useRef, useState } = React;
+
+    // ---- Config ----
+    const STORAGE_ITEMS_KEY = "content-tracker-items-v2";
+    const STORAGE_STATUSES_KEY = "content-tracker-statuses-v1";
+    const STORAGE_SERIES_KEY = "content-tracker-series-v1";
+
+    // Default statuses
+    const DEFAULT_STATUSES = [
+      "ยังไม่ดำเนินการ",
+      "รอใส่ภาพ",
+      "กำลังใส่ภาพ",
+      "ใส่ภาพเสร็จแล้ว",
+      "ตรวจสอบคุณภาพ (QC)",
+      "เสร็จสิ้น",
+      "พักไว้",
+      "ยกเลิก",
+    ];
+
+    const DONE_SET = new Set(["ใส่ภาพเสร็จแล้ว", "เสร็จสิ้น"]);
+
+    // Types (for reference)
+    // Item: { id, series, episode, status, assignee?, lastUpdated }
+    // SeriesMeta: { id, name, icon? }
+
+    // Helpers
+    const uid = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const fmtDate = (ts) => new Date(ts).toLocaleString();
+
+    const sampleItems = [
+      { id: uid(), series: "สไลม์", episode: "1", status: "ยังไม่ดำเนินการ", assignee: "", lastUpdated: Date.now() },
+      { id: uid(), series: "จอมเวทวารี", episode: "1", status: "ใส่ภาพเสร็จแล้ว", assignee: "", lastUpdated: Date.now() },
+      { id: uid(), series: "จอมเวทวารี", episode: "2", status: "ยังไม่ดำเนินการ", assignee: "", lastUpdated: Date.now() },
+    ];
+
+    const sampleSeries = [
+      { id: uid(), name: "สไลม์", icon: "🟢" },
+      { id: uid(), name: "จอมเวทวารี", icon: "💧" },
+    ];
+
+    function ContentTracker() {
+      // Items
+      const [items, setItems] = useState(() => {
+        try {
+          const raw = localStorage.getItem(STORAGE_ITEMS_KEY);
+          if (raw) return JSON.parse(raw);
+        } catch {}
+        return sampleItems;
+      });
+
+      // Statuses
+      const [statuses, setStatuses] = useState(() => {
+        try {
+          const raw = localStorage.getItem(STORAGE_STATUSES_KEY);
+        if (raw) return JSON.parse(raw);
+        } catch {}
+        return DEFAULT_STATUSES;
+      });
+
+      // Series
+      const [seriesMeta, setSeriesMeta] = useState(() => {
+        try {
+          const raw = localStorage.getItem(STORAGE_SERIES_KEY);
+          if (raw) return JSON.parse(raw);
+        } catch {}
+        const names = Array.from(new Set(sampleItems.map((x) => x.series)));
+        return names.map((n, i) => ({ id: uid(), name: n, icon: i === 0 ? "🟢" : "💧" }));
+      });
+
+      // UI state for Series Manager
+      const [ui, setUi] = useState({
+        adding: false, newName: "", newIcon: "",
+        editingId: null, editingName: "", editingIcon: ""
+      });
+
+      // Filters
+      const [filters, setFilters] = useState({ q: "", series: "ทั้งหมด", status: "ทั้งหมด" });
+
+      // Add form
+      const [form, setForm] = useState({ series: "", episode: "", assignee: "", status: statuses[0] });
+      const fileInputRef = useRef(null);
+
+      // Persist
+      useEffect(() => { localStorage.setItem(STORAGE_ITEMS_KEY, JSON.stringify(items)); }, [items]);
+      useEffect(() => { localStorage.setItem(STORAGE_STATUSES_KEY, JSON.stringify(statuses)); }, [statuses]);
+      useEffect(() => { localStorage.setItem(STORAGE_SERIES_KEY, JSON.stringify(seriesMeta)); }, [seriesMeta]);
+
+      // Derived
+      const seriesMap = useMemo(() => {
+        const m = new Map();
+        for (const s of seriesMeta) m.set(s.name, s);
+        return m;
+      }, [seriesMeta]);
+
+      const seriesNames = useMemo(() => ["ทั้งหมด", ...seriesMeta.map((s) => s.name)], [seriesMeta]);
+
+      const filteredItems = useMemo(() => {
+        const q = filters.q.trim().toLowerCase();
+        return items
+          .filter((it) => (filters.series === "ทั้งหมด" ? true : it.series === filters.series))
+          .filter((it) => (filters.status === "ทั้งหมด" ? true : it.status === filters.status))
+          .filter((it) =>
+            q ? [it.series, it.episode, it.status, it.assignee].join(" ").toLowerCase().includes(q) : true
+          )
+          .sort((a, b) => {
+            const s = a.series.localeCompare(b.series, "th");
+            if (s !== 0) return s;
+            const na = Number(a.episode), nb = Number(b.episode);
+            if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+            return a.episode.localeCompare(b.episode, "th");
+          });
+      }, [items, filters]);
+
+      const groups = useMemo(() => {
+        const m = new Map();
+        for (const it of filteredItems) {
+          if (!m.has(it.series)) m.set(it.series, []);
+          m.get(it.series).push(it);
+        }
+        return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0], "th"));
+      }, [filteredItems]);
+
+      const total = items.length;
+      const done = items.filter((x) => DONE_SET.has(x.status)).length;
+      const pct = total ? Math.round((done / total) * 100) : 0;
+
+      // Actions
+      const addItem = () => {
+        if (!form.series.trim() || !form.episode.trim()) return alert("กรุณาเลือก/กรอก 'เรื่อง' และ 'ตอนที่'");
+        const newItem = { id: uid(), series: form.series.trim(), episode: form.episode.trim(), status: form.status, assignee: form.assignee.trim(), lastUpdated: Date.now() };
+        setItems((s) => [newItem, ...s]);
+        setForm({ series: form.series, episode: "", assignee: "", status: statuses[0] });
+      };
+
+      const updateItem = (id, patch) => {
+        setItems((s) => s.map((it) => (it.id === id ? { ...it, ...patch, lastUpdated: Date.now() } : it)));
+      };
+
+      const removeItem = (id) => setItems((s) => s.filter((it) => it.id !== id));
+      const duplicateItem = (id) => {
+        setItems((s) => {
+          const it = s.find((x) => x.id === id);
+          if (!it) return s;
+          const copy = { ...it, id: uid(), lastUpdated: Date.now() };
+          return [copy, ...s];
+        });
+      };
+
+      const clearAll = () => { if (!confirm("ลบข้อมูลทั้งหมด?")) return; setItems([]); };
+      const resetSamples = () => {
+        if (!confirm("แทนที่ด้วยรายการตัวอย่าง?")) return;
+        setItems(sampleItems.map((x) => ({ ...x, id: uid(), lastUpdated: Date.now() })));
+        setSeriesMeta(sampleSeries.map((x) => ({...x, id: uid()})));
+      };
+
+      const exportJSON = () => {
+        const data = { items, statuses, seriesMeta };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url; a.download = `content-tracker-${new Date().toISOString().slice(0,10)}.json`; a.click();
+        URL.revokeObjectURL(url);
+      };
+
+      const onImportJSON = (e) => {
+        const file = e.target.files?.[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const data = JSON.parse(String(reader.result));
+            if (Array.isArray(data?.items)) setItems(data.items);
+            if (Array.isArray(data?.statuses)) setStatuses(data.statuses);
+            if (Array.isArray(data?.seriesMeta)) setSeriesMeta(data.seriesMeta);
+            else {
+              const names = Array.from(new Set((data?.items||[]).map((x) => x.series)));
+              setSeriesMeta(names.map((n) => ({ id: uid(), name: n })));
+            }
+          } catch { alert("ไฟล์ไม่ถูกต้อง"); }
+          e.target.value = "";
+        };
+        reader.readAsText(file);
+      };
+
+      // Series Manager UI
+      const startAddSeries = () => setUi((s) => ({ ...s, adding: true, newName: "", newIcon: "" }));
+      const cancelAddSeries = () => setUi((s) => ({ ...s, adding: false, newName: "", newIcon: "" }));
+      const saveAddSeries = () => {
+        const name = ui.newName.trim();
+        if (!name) return alert("กรุณากรอกชื่อเรื่อง");
+        if (seriesMeta.some((x) => x.name === name)) return alert("มีชื่อนี้แล้ว");
+        setSeriesMeta((arr) => [...arr, { id: uid(), name, icon: ui.newIcon.trim() }]);
+        setForm((f) => ({ ...f, series: name }));
+        cancelAddSeries();
+      };
+
+      const startEditSeries = (s) => setUi((u) => ({ ...u, editingId: s.id, editingName: s.name, editingIcon: s.icon || "" }));
+      const cancelEditSeries = () => setUi((u) => ({ ...u, editingId: null, editingName: "", editingIcon: "" }));
+      const saveEditSeries = () => {
+        const id = ui.editingId; if (!id) return;
+        const name = ui.editingName.trim();
+        if (!name) return alert("กรุณากรอกชื่อเรื่อง");
+        const old = seriesMeta.find((x) => x.id === id); if (!old) return;
+        setItems((arr) => arr.map((it) => (it.series === old.name ? { ...it, series: name } : it)));
+        setSeriesMeta((arr) => arr.map((x) => (x.id === id ? { ...x, name, icon: ui.editingIcon.trim() } : x)));
+        setForm((f) => (f.series === old.name ? { ...f, series: name } : f));
+        cancelEditSeries();
+      };
+
+      const removeSeriesById = (id) => {
+        const meta = seriesMeta.find((s) => s.id === id); if (!meta) return;
+        setSeriesMeta((arr) => arr.filter((s) => s.id !== id));
+      };
+
+      // Components
+      const Th = ({ children, className = "" }) => <th className={"px-3 py-2 text-xs font-semibold uppercase tracking-wide " + className}>{children}</th>;
+      const Td = ({ children, className = "", colSpan }) => <td colSpan={colSpan} className={"px-3 py-2 align-top " + className}>{children}</td>;
+
+      const ProgressBar = ({ pct, done, total }) => (
+        <div className="w-full">
+          <div className="flex items-center justify-between mb-1">
+            <div className="text-sm font-medium">ความคืบหน้า</div>
+            <div className="text-xs text-gray-500">{done}/{total} งาน ({pct}%)</div>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-3">
+            <div className="h-3 rounded-full bg-black" style={{ width: pct + "%" }} />
+          </div>
+        </div>
+      );
+
+      const SeriesIcon = ({ icon, size = 20 }) => {
+        if (!icon) return <span className="inline-block" style={{ width: size, height: size }} />;
+        const isUrl = /^(https?:|data:)/.test(icon);
+        if (isUrl) return <img src={icon} alt="icon" style={{ width: size, height: size }} className="rounded" />;
+        return <span style={{ fontSize: size * 0.9 }}>{icon}</span>;
+      };
+
+      const badgeClass = (status) => {
+        if (DONE_SET.has(status)) return "bg-green-50 border-green-200";
+        if (status.includes("กำลัง") || status.includes("ดำเนิน")) return "bg-blue-50 border-blue-200";
+        if (status.includes("รอ")) return "bg-yellow-50 border-yellow-200";
+        if (status.includes("ยกเลิก") || status.includes("พัก")) return "bg-gray-50 border-gray-200";
+        return "";
+      };
+
+      return (
+        <div className="min-h-screen bg-gray-50 text-gray-800 p-6">
+          <div className="max-w-6xl mx-auto space-y-6">
+            <header className="flex flex-col md:flex-row md:items-end md:justify-between gap-4">
+              <div>
+                <h1 className="text-2xl md:text-3xl font-bold">ตัวติดตามสถานะงานทำคอนเทนต์</h1>
+                <p className="text-sm text-gray-500">เลือกเรื่องจากรายการ ไม่ต้องพิมพ์ซ้ำ เพิ่ม/ลบ/แก้ไขชื่อเรื่อง และใส่ไอคอนหน้าเรื่องได้</p>
+              </div>
+              <div className="w-full md:w-auto">
+                <ProgressBar pct={pct} done={done} total={total} />
+              </div>
+            </header>
+
+            {/* Controls */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="col-span-1 md:col-span-2">
+                <label className="text-xs font-medium">ค้นหา</label>
+                <input
+                  className="w-full rounded-xl border p-2"
+                  placeholder="ค้นหาตามเรื่อง/ตอน/สถานะ/ผู้รับผิดชอบ"
+                  value={filters.q}
+                  onChange={(e) => setFilters((s) => ({ ...s, q: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium">เรื่อง</label>
+                <select
+                  className="w-full rounded-xl border p-2"
+                  value={filters.series}
+                  onChange={(e) => setFilters((s) => ({ ...s, series: e.target.value }))}
+                >
+                  {seriesNames.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium">สถานะ</label>
+                <select
+                  className="w-full rounded-xl border p-2"
+                  value={filters.status}
+                  onChange={(e) => setFilters((s) => ({ ...s, status: e.target.value }))}
+                >
+                  {["ทั้งหมด", ...statuses].map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="md:col-span-4 flex items-center gap-2">
+                <button className="ml-auto rounded-xl border px-3 py-2 text-sm hover:bg-gray-100" onClick={() => setFilters({ q: "", series: "ทั้งหมด", status: "ทั้งหมด" })}>
+                  เคลียร์ตัวกรอง
+                </button>
+              </div>
+            </div>
+
+            {/* Add Form */}
+            <div className="bg-white rounded-2xl shadow p-4 grid grid-cols-1 md:grid-cols-6 gap-3">
+              <div className="md:col-span-2">
+                <label className="text-xs font-medium">เรื่อง *</label>
+                <select
+                  className="w-full rounded-xl border p-2"
+                  value={form.series}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "__add__") startAddSeries(); else setForm((f) => ({ ...f, series: v }));
+                  }}
+                >
+                  <option value="">— เลือกเรื่อง —</option>
+                  {seriesMeta.map((s) => (
+                    <option key={s.id} value={s.name}>{s.name}</option>
+                  ))}
+                  <option value="__add__">+ เพิ่มเรื่องใหม่…</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium">ตอนที่ *</label>
+                <input className="w-full rounded-xl border p-2" value={form.episode} onChange={(e) => setForm((f) => ({ ...f, episode: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-xs font-medium">ผู้รับผิดชอบ</label>
+                <input className="w-full rounded-xl border p-2" value={form.assignee} onChange={(e) => setForm((f) => ({ ...f, assignee: e.target.value }))} />
+              </div>
+              <div>
+                <label className="text-xs font-medium">สถานะ</label>
+                <select className="w-full rounded-xl border p-2" value={form.status} onChange={(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
+                  {statuses.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="md:col-span-6 flex flex-wrap gap-3">
+                <button className="rounded-2xl bg-black text-white px-4 py-2 text-sm" onClick={addItem}>เพิ่มรายการ</button>
+                <button className="rounded-2xl border px-4 py-2 text-sm" onClick={resetSamples}>โหลดรายการตัวอย่าง</button>
+                <button className="rounded-2xl border px-4 py-2 text-sm" onClick={clearAll}>ลบทั้งหมด</button>
+                <button className="rounded-2xl border px-4 py-2 text-sm" onClick={exportJSON}>ส่งออก JSON</button>
+                <input ref={fileInputRef} type="file" accept="application/json" className="hidden" onChange={onImportJSON} />
+                <button className="rounded-2xl border px-4 py-2 text-sm" onClick={() => fileInputRef.current?.click()}>นำเข้า JSON</button>
+              </div>
+            </div>
+
+            {/* Series Manager */}
+            <div className="bg-white rounded-2xl shadow p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <h2 className="font-semibold">จัดการเรื่อง</h2>
+                <button className="ml-auto rounded-xl border px-3 py-1 text-sm hover:bg-gray-50" onClick={startAddSeries}>+ เพิ่มเรื่อง</button>
+              </div>
+
+              {/* Add Series Inline Panel */}
+              {ui.adding && (
+                <div className="mb-3 p-3 border rounded-xl bg-gray-50">
+                  <div className="grid grid-cols-1 md:grid-cols-6 gap-3 items-end">
+                    <div className="md:col-span-3">
+                      <label className="text-xs font-medium">ชื่อเรื่อง</label>
+                      <input className="w-full rounded-xl border p-2" value={ui.newName} onChange={(e)=>setUi((s)=>({...s,newName:e.target.value}))} />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-xs font-medium">ไอคอน (emoji หรือ URL)</label>
+                      <input className="w-full rounded-xl border p-2" value={ui.newIcon} onChange={(e)=>setUi((s)=>({...s,newIcon:e.target.value}))} />
+                    </div>
+                    <div className="flex gap-2">
+                      <button className="rounded-xl bg-black text-white px-3 py-2 text-sm" onClick={saveAddSeries}>บันทึก</button>
+                      <button className="rounded-xl border px-3 py-2 text-sm" onClick={cancelAddSeries}>ยกเลิก</button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Series list */}
+              <div className="flex flex-col gap-2">
+                {seriesMeta.map((s) => (
+                  <div key={s.id} className="flex items-center gap-3 border rounded-xl px-3 py-2">
+                    <SeriesIcon icon={s.icon} size={18} />
+                    {ui.editingId === s.id ? (
+                      <>
+                        <input className="rounded-xl border p-1 w-56" value={ui.editingName} onChange={(e)=>setUi((u)=>({...u, editingName:e.target.value}))} />
+                        <input className="rounded-xl border p-1 w-56" placeholder="emoji หรือ URL" value={ui.editingIcon} onChange={(e)=>setUi((u)=>({...u, editingIcon:e.target.value}))} />
+                        <button className="rounded-xl bg-black text-white px-3 py-1 text-sm" onClick={saveEditSeries}>บันทึก</button>
+                        <button className="rounded-xl border px-3 py-1 text-sm" onClick={cancelEditSeries}>ยกเลิก</button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="whitespace-normal break-words flex-1">{s.name}</span>
+                        <button className="text-blue-600 text-sm" onClick={() => startEditSeries(s)}>แก้ไข</button>
+                        <button className="text-red-600 text-sm" onClick={() => removeSeriesById(s.id)}>ลบ</button>
+                      </>
+                    )}
+                  </div>
+                ))}
+                {seriesMeta.length === 0 && (
+                  <div className="text-gray-400 text-sm">ยังไม่มีเรื่อง — กด “+ เพิ่มเรื่อง” เพื่อเริ่มต้น</div>
+                )}
+              </div>
+
+              <p className="text-xs text-gray-500 mt-3">* การลบจะลบเฉพาะรายชื่อเรื่อง รายการตอนเดิมยังอยู่ (แต่จะไม่แสดงไอคอน)</p>
+            </div>
+
+            {/* Grouped Tables by Series */}
+            {groups.map(([seriesName, arr]) => (
+              <section key={seriesName} className="bg-white rounded-2xl shadow">
+                <div className="flex items-center gap-3 p-4 border-b">
+                  <SeriesIcon icon={seriesMap.get(seriesName)?.icon} size={24} />
+                  <h3 className="text-lg font-semibold whitespace-normal break-words">{seriesName}</h3>
+                  <div className="ml-auto flex items-center gap-2">
+                    <button className="rounded-xl border px-3 py-1 text-sm hover:bg-gray-50" onClick={() => setForm((f) => ({ ...f, series: seriesName }))}>
+                      + เพิ่มตอนให้เรื่องนี้
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-2 overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-100 text-left">
+                        <Th>ตอนที่</Th>
+                        <Th>สถานะ</Th>
+                        <Th>ผู้รับผิดชอบ</Th>
+                        <Th>อัปเดตล่าสุด</Th>
+                        <Th className="text-right">การกระทำ</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {arr.map((it) => (
+                        <tr key={it.id} className="border-t">
+                          <Td className="font-medium">{it.episode}</Td>
+                          <Td>
+                            <select className={"rounded-lg border p-1 " + badgeClass(it.status)} value={it.status} onChange={(e) => updateItem(it.id, { status: e.target.value })}>
+                              {statuses.map((s) => (
+                                <option key={s} value={s}>{s}</option>
+                              ))}
+                            </select>
+                          </Td>
+                          <Td>
+                            <input className="rounded-lg border p-1 w-36" value={it.assignee || ""} onChange={(e) => updateItem(it.id, { assignee: e.target.value })} />
+                          </Td>
+                          <Td className="text-gray-500">{fmtDate(it.lastUpdated)}</Td>
+                          <Td className="text-right whitespace-nowrap">
+                            <button className="rounded-xl border px-2 py-1 mr-2 hover:bg-gray-50" onClick={() => duplicateItem(it.id)}>คัดลอก</button>
+                            <button className="rounded-xl border px-2 py-1 hover:bg-red-50 text-red-600" onClick={() => removeItem(it.id)}>ลบ</button>
+                          </Td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {arr.length === 0 && (
+                    <div className="text-center text-gray-400 py-6">ยังไม่มีตอน</div>
+                  )}
+                </div>
+              </section>
+            ))}
+
+            {/* Status Manager */}
+            <div className="bg-white rounded-2xl shadow p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <h2 className="font-semibold">จัดการสถานะ</h2>
+                <button className="ml-auto rounded-xl border px-3 py-1 text-sm hover:bg-gray-50" onClick={() => {
+                  const name = prompt("เพิ่มสถานะใหม่ (เช่น 'รอตรวจสะกด'):");
+                  if (!name) return; if (statuses.includes(name)) return alert("มีสถานะนี้แล้ว"); setStatuses((s) => [...s, name]);
+                }}>+ เพิ่มสถานะ</button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {statuses.map((s) => (
+                  <span key={s} className="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm">
+                    {s}
+                    {DEFAULT_STATUSES.includes(s) ? (
+                      <span className="text-gray-400 text-xs">(พื้นฐาน)</span>
+                    ) : (
+                      <button className="text-red-500 text-xs" onClick={() => setStatuses((arr) => arr.filter((x) => x !== s))}>ลบ</button>
+                    )}
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-gray-500 mt-2">* งานเสร็จจะนับเมื่อสถานะเป็น “ใส่ภาพเสร็จแล้ว” หรือ “เสร็จสิ้น”</p>
+            </div>
+
+            {/* Tips */}
+            <div className="text-xs text-gray-500">
+              <ul className="list-disc ml-5 space-y-1">
+                <li>ข้อมูลจะถูกบันทึกในเบราว์เซอร์ของคุณ (localStorage) – แนะนำให้ <b>ส่งออก JSON</b> เป็นระยะ</li>
+                <li>ตั้งไอคอนเรื่องเป็น emoji (เช่น 🧪) หรือ URL รูปก็ได้</li>
+                <li>คลิก “+ เพิ่มตอนให้เรื่องนี้” ที่หัวเรื่อง เพื่อกรอกแบบฟอร์มโดยเลือกเรื่องนั้นอัตโนมัติ</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Render
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<ContentTracker />);
+  </script>
+</body>
+</html>
