@@ -1,0 +1,710 @@
+<title>บอร์ดงานคลิปช่อง</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mitr:wght@500&family=IBM+Plex+Sans+Thai:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+  /* Layout: one production column — header + stage strip summary on top, add form, then one table per series; admin panels fold at the bottom. */
+  :root {
+    --bg: #f4f5f9;
+    --surface: #ffffff;
+    --surface-2: #eceef6;
+    --line: #dadeea;
+    --fg: #1a1e2c;
+    --muted: #5b6278;
+    --accent: #3343c2;
+    --accent-fg: #ffffff;
+    --accent-soft: #e5e8fb;
+    --good: #1b7548; --good-soft: #e0f3e8;
+    --warn: #8f5b00; --warn-soft: #faefd6;
+    --active: #1d5ea3; --active-soft: #e0ecf8;
+    --idle: #4f566b; --idle-soft: #eceef3;
+    --danger: #b02424; --danger-soft: #fbe5e5;
+    --font-display: "Mitr", "IBM Plex Sans Thai", system-ui, sans-serif;
+    --font-body: "IBM Plex Sans Thai", "Noto Sans Thai", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+    --r: 10px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10121a; --surface: #181b26; --surface-2: #20242f; --line: #2c3142;
+      --fg: #e7e9f2; --muted: #9aa1b7;
+      --accent: #8f9cff; --accent-fg: #10121a; --accent-soft: #252b50;
+      --good: #6cd29b; --good-soft: #163426;
+      --warn: #efc165; --warn-soft: #382c13;
+      --active: #7db4ef; --active-soft: #162b41;
+      --idle: #a8aec2; --idle-soft: #242836;
+      --danger: #ff8d8d; --danger-soft: #3c1b1e;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10121a; --surface: #181b26; --surface-2: #20242f; --line: #2c3142;
+    --fg: #e7e9f2; --muted: #9aa1b7;
+    --accent: #8f9cff; --accent-fg: #10121a; --accent-soft: #252b50;
+    --good: #6cd29b; --good-soft: #163426;
+    --warn: #efc165; --warn-soft: #382c13;
+    --active: #7db4ef; --active-soft: #162b41;
+    --idle: #a8aec2; --idle-soft: #242836;
+    --danger: #ff8d8d; --danger-soft: #3c1b1e;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.55; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding-inline: 16px; padding-block: 24px 64px; display: flex; flex-direction: column; gap: 20px; }
+  h1, h2, h3 { font-family: var(--font-display); font-weight: 500; margin: 0; text-wrap: balance; line-height: 1.25; }
+  h1 { font-size: 1.75rem; }
+  h2 { font-size: 1.1rem; }
+  h3 { font-size: 1.15rem; }
+  .muted { color: var(--muted); }
+  .small { font-size: 0.82rem; }
+  .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  button, input, select { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* header */
+  .top { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; }
+  .top-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .sync { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--idle); }
+  .dot.on { background: var(--good); }
+  .dot.off { background: var(--danger); }
+  .progress { width: min(320px, 100%); display: flex; flex-direction: column; gap: 6px; }
+  .progress-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .progress-big { font-family: var(--font-mono); font-size: 1.6rem; line-height: 1; }
+  .bar { height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+  .bar > i { display: block; height: 100%; background: var(--good); border-radius: 99px; transition: width .4s ease; }
+
+  /* stage strip */
+  .stages { display: flex; flex-wrap: wrap; gap: 8px; }
+  .stage { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 4px 6px 4px 12px; cursor: pointer; font-size: 0.85rem; }
+  .stage:hover { border-color: var(--accent); }
+  .stage[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+  .stage .n { font-family: var(--font-mono); font-size: 0.8rem; min-width: 26px; text-align: center; padding: 1px 6px; border-radius: 99px; }
+
+  .t-good { background: var(--good-soft); color: var(--good); }
+  .t-warn { background: var(--warn-soft); color: var(--warn); }
+  .t-active { background: var(--active-soft); color: var(--active); }
+  .t-idle { background: var(--idle-soft); color: var(--idle); }
+  .t-mute { background: var(--idle-soft); color: var(--muted); }
+
+  /* controls */
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); align-items: end; }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field label { font-size: 0.78rem; font-weight: 500; color: var(--muted); letter-spacing: 0.02em; }
+  input[type="text"], input[type="search"], select {
+    width: 100%; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+  input:disabled, select:disabled { opacity: .6; }
+  .row-btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 7px 14px; cursor: pointer; font-size: 0.88rem; white-space: nowrap; }
+  .btn:hover { background: var(--surface-2); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 500; }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.sm { padding: 4px 10px; font-size: 0.8rem; }
+  .btn.danger { color: var(--danger); }
+  .btn.danger.armed { background: var(--danger); color: var(--surface); border-color: var(--danger); }
+  .linkbtn { border: 0; background: none; padding: 2px 4px; cursor: pointer; color: var(--accent); font-size: 0.85rem; }
+  .linkbtn.danger { color: var(--danger); }
+
+  .notice { border-radius: var(--r); padding: 12px 14px; font-size: 0.9rem; border: 1px solid var(--line); background: var(--surface-2); }
+  .notice.warn { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
+
+  /* series groups */
+  .group { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); min-width: 0; }
+  .group-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .group-head h3 { min-width: 0; overflow-wrap: anywhere; }
+  .icon { font-size: 1.3rem; line-height: 1; width: 1.5rem; text-align: center; }
+  .mini { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--muted); }
+  .mini .bar { width: 80px; height: 6px; }
+  .group-head .btn { margin-left: auto; }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+  th { text-align: left; font-size: 0.72rem; font-weight: 600; color: var(--muted); letter-spacing: 0.06em; text-transform: uppercase; padding: 8px 12px; background: var(--surface-2); white-space: nowrap; }
+  td { padding: 8px 12px; border-top: 1px solid var(--line); vertical-align: middle; }
+  td.ep { font-family: var(--font-mono); font-weight: 500; white-space: nowrap; }
+  td.when { color: var(--muted); font-size: 0.8rem; white-space: nowrap; }
+  td.act { text-align: right; white-space: nowrap; }
+  td.act .btn + .btn { margin-left: 6px; }
+  select.status { width: auto; min-width: 170px; padding: 5px 8px; border-color: transparent; font-weight: 500; }
+  input.assignee { width: 150px; padding: 5px 8px; }
+
+  /* panels */
+  details.card { gap: 0; }
+  details.card > summary { cursor: pointer; list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  details.card > summary::-webkit-details-marker { display: none; }
+  details.card > summary::after { content: "▾"; color: var(--muted); transition: transform .2s; }
+  details.card[open] > summary::after { transform: rotate(180deg); }
+  details.card[open] > summary { margin-bottom: 12px; }
+  .list { display: flex; flex-direction: column; gap: 6px; }
+  .list-item { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; }
+  .list-item .name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .list-item input[type="text"] { width: auto; flex: 1 1 140px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; border-radius: 99px; padding: 3px 10px; font-size: 0.85rem; }
+  .empty { padding: 32px 16px; text-align: center; color: var(--muted); display: flex; flex-direction: column; gap: 6px; align-items: center; }
+  .empty strong { color: var(--fg); font-family: var(--font-display); font-weight: 500; font-size: 1.05rem; }
+
+  .toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 0.88rem; max-width: calc(100% - 32px); box-shadow: 0 6px 24px rgba(0,0,0,.18); z-index: 10; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  @media (max-width: 520px) { h1 { font-size: 1.4rem; } .group-head .btn { margin-left: 0; } }
+</style>
+
+<div id="root">
+  <div class="wrap"><h1>บอร์ดงานคลิปช่อง</h1><p class="muted">กำลังโหลด…</p></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/htm@3.1.1/dist/htm.umd.js"></script>
+<script>
+(function () {
+  const { useState, useEffect, useMemo, useRef } = React;
+  const html = htm.bind(React.createElement);
+
+  const DEFAULT_STATUSES = [
+    "ยังไม่ดำเนินการ", "รอใส่ภาพ", "กำลังใส่ภาพ", "ใส่ภาพเสร็จแล้ว",
+    "ตรวจสอบคุณภาพ (QC)", "เสร็จสิ้น", "พักไว้", "ยกเลิก",
+  ];
+  const DONE = new Set(["ใส่ภาพเสร็จแล้ว", "เสร็จสิ้น"]);
+  const ALL = "ทั้งหมด";
+
+  function tone(s) {
+    if (DONE.has(s)) return "good";
+    if (s.includes("ยกเลิก") || s.includes("พัก")) return "mute";
+    if (s.startsWith("ยังไม่")) return "idle";
+    if (s.includes("รอ")) return "warn";
+    return "active";
+  }
+  function cmpEp(a, b) {
+    const na = Number(a), nb = Number(b);
+    if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+    return String(a).localeCompare(String(b), "th", { numeric: true });
+  }
+  const fmtWhen = (ts) => ts ? new Date(ts).toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" }) : "";
+  function errText(e) {
+    const code = e && e.code;
+    if (code === "invalid_argument") return "บัญชีนี้แก้ไขข้อมูลไม่ได้ ขอสิทธิ์ Contributor จากเจ้าของหน้านี้";
+    if (code === "quota_exceeded") return "พื้นที่เก็บข้อมูลเต็ม ลบงานเก่าที่ไม่ใช้แล้วก่อน";
+    if (code === "resource_exhausted") return "บันทึกถี่เกินไป รอสักครู่แล้วลองใหม่";
+    return "บันทึกไม่สำเร็จ ลองอีกครั้ง";
+  }
+  const capability = (name) => (window.claude && window.claude.use ? window.claude.use(name) : Promise.resolve(null));
+
+  function StatusSelect({ value, statuses, onChange, disabled, id }) {
+    const opts = statuses.includes(value) ? statuses : [...statuses, value];
+    return html`<select id=${id} class=${"status t-" + tone(value)} value=${value} disabled=${disabled}
+        onChange=${(e) => onChange(e.target.value)}>
+      ${opts.map((s) => html`<option key=${s} value=${s}>${s}</option>`)}
+    </select>`;
+  }
+
+  function Row({ it, statuses, names, readOnly, onUpdate, onDuplicate, onRemove }) {
+    const [draft, setDraft] = useState(it.assignee || "");
+    const focused = useRef(false);
+    const [armed, setArmed] = useState(false);
+    useEffect(() => { if (!focused.current) setDraft(it.assignee || ""); }, [it.assignee]);
+    useEffect(() => {
+      if (!armed) return;
+      const t = setTimeout(() => setArmed(false), 4000);
+      return () => clearTimeout(t);
+    }, [armed]);
+    const commit = () => {
+      focused.current = false;
+      const v = draft.trim();
+      if (v !== (it.assignee || "")) onUpdate(it.id, { assignee: v });
+    };
+    const who = it.updatedBy && names[it.updatedBy] ? names[it.updatedBy].name : "";
+    return html`<tr>
+      <td class="ep">EP.${it.episode}</td>
+      <td><${StatusSelect} id=${"st-" + it.id} value=${it.status} statuses=${statuses} disabled=${readOnly}
+            onChange=${(v) => onUpdate(it.id, { status: v })} /></td>
+      <td><input id=${"as-" + it.id} type="text" class="assignee" list="assignee-list" placeholder="ใส่ชื่อ"
+            value=${draft} disabled=${readOnly}
+            onFocus=${() => { focused.current = true; }}
+            onChange=${(e) => setDraft(e.target.value)}
+            onBlur=${commit}
+            onKeyDown=${(e) => { if (e.key === "Enter") e.target.blur(); }} /></td>
+      <td class="when">${fmtWhen(it.updatedAt)}${who ? html`<br/><span>โดย ${who}</span>` : null}</td>
+      <td class="act">${readOnly ? null : html`
+        <button class="btn sm" onClick=${() => onDuplicate(it)}>คัดลอก</button>
+        <button class=${"btn sm danger" + (armed ? " armed" : "")}
+          onClick=${() => { if (armed) { setArmed(false); onRemove(it.id); } else setArmed(true); }}>
+          ${armed ? "กดอีกครั้งเพื่อลบ" : "ลบ"}</button>`}
+      </td>
+    </tr>`;
+  }
+
+  function SeriesRow({ s, count, readOnly, onSave, onRemove }) {
+    const [edit, setEdit] = useState(false);
+    const [name, setName] = useState(s.name);
+    const [icon, setIcon] = useState(s.icon || "");
+    const [armed, setArmed] = useState(false);
+    useEffect(() => {
+      if (!armed) return;
+      const t = setTimeout(() => setArmed(false), 4000);
+      return () => clearTimeout(t);
+    }, [armed]);
+    if (edit) {
+      return html`<div class="list-item">
+        <input id=${"sn-" + s.id} type="text" value=${name} onChange=${(e) => setName(e.target.value)} placeholder="ชื่อเรื่อง" />
+        <input id=${"si-" + s.id} type="text" value=${icon} onChange=${(e) => setIcon(e.target.value)} placeholder="emoji" style=${{ flex: "0 1 90px" }} />
+        <button class="btn sm primary" onClick=${async () => { if (await onSave(s, name, icon)) setEdit(false); }}>บันทึก</button>
+        <button class="btn sm" onClick=${() => { setEdit(false); setName(s.name); setIcon(s.icon || ""); }}>ยกเลิก</button>
+      </div>`;
+    }
+    return html`<div class="list-item">
+      <span class="icon">${s.icon || "·"}</span>
+      <span class="name">${s.name} <span class="muted small">· ${count} ตอน</span></span>
+      ${readOnly ? null : html`
+        <button class="linkbtn" onClick=${() => { setName(s.name); setIcon(s.icon || ""); setEdit(true); }}>แก้ไข</button>
+        <button class="linkbtn danger" onClick=${() => { if (armed) { setArmed(false); onRemove(s); } else setArmed(true); }}>
+          ${armed ? (count ? `ลบเรื่องนี้ (ตอนทั้ง ${count} ตอนยังอยู่)?` : "ยืนยันลบ") : "ลบ"}</button>`}
+    </div>`;
+  }
+
+  function App() {
+    const [conn, setConn] = useState("loading"); // loading | online | offline
+    const [db, setDb] = useState(null);
+    const [userApi, setUserApi] = useState(null);
+    const [myId, setMyId] = useState(null);
+    const [readOnly, setReadOnly] = useState(false);
+    const [items, setItems] = useState([]);
+    const [seriesMeta, setSeriesMeta] = useState([]);
+    const [customStatuses, setCustomStatuses] = useState([]);
+    const [names, setNames] = useState({});
+    const [toast, setToast] = useState(null);
+    const [filters, setFilters] = useState({ q: "", series: ALL, status: ALL });
+    const [form, setForm] = useState({ series: "", episode: "", assignee: "", status: DEFAULT_STATUSES[0] });
+    const [newSeries, setNewSeries] = useState(null); // {name, icon} while adding
+    const [newStatus, setNewStatus] = useState("");
+    const [busy, setBusy] = useState("");
+    const fileRef = useRef(null);
+    const epRef = useRef(null);
+    const formRef = useRef(null);
+    const toastTimer = useRef(null);
+
+    const say = (msg) => {
+      setToast(msg);
+      clearTimeout(toastTimer.current);
+      toastTimer.current = setTimeout(() => setToast(null), 3200);
+    };
+
+    // Connect to the shared store once.
+    useEffect(() => {
+      let alive = true;
+      const unsubs = [];
+      (async () => {
+        const d = await capability("db");
+        if (!alive) return;
+        if (!d) { setConn("offline"); return; }
+        setDb(d);
+        const onErr = (e) => {
+          if (e && (e.code === "revoked" || e.code === "unavailable")) setConn("offline");
+          else say("การเชื่อมต่อขัดข้อง ลองโหลดหน้าใหม่");
+        };
+        unsubs.push(d.collection("items").onSnapshot((s) => {
+          setItems(s.docs.map((x) => ({ id: x.id, ...x.data() })));
+          setConn("online");
+        }, onErr));
+        unsubs.push(d.collection("series").onSnapshot((s) => {
+          setSeriesMeta(s.docs.map((x) => ({ id: x.id, ...x.data() })));
+        }, onErr));
+        unsubs.push(d.doc("config/statuses").onSnapshot((s) => {
+          const c = s.exists ? s.data().custom : null;
+          setCustomStatuses(Array.isArray(c) ? c : []);
+        }, onErr));
+      })();
+      (async () => {
+        const u = await capability("user");
+        if (!alive || !u) return;
+        setUserApi(u);
+        const [id, canWrite] = await Promise.all([u.id(), u.can("data.write")]);
+        if (!alive) return;
+        setMyId(id);
+        if (canWrite === false) setReadOnly(true);
+      })();
+      return () => { alive = false; unsubs.forEach((f) => f()); };
+    }, []);
+
+    // Resolve the names of whoever last touched each row.
+    const editorIds = useMemo(() => Array.from(new Set(items.map((x) => x.updatedBy).filter(Boolean))).sort().join("|"), [items]);
+    useEffect(() => {
+      if (!userApi || !editorIds) return;
+      let alive = true;
+      userApi.profiles(editorIds.split("|")).then((ps) => { if (alive) setNames(ps); });
+      return () => { alive = false; };
+    }, [userApi, editorIds]);
+
+    const statuses = useMemo(() => {
+      const out = [...DEFAULT_STATUSES];
+      for (const s of customStatuses) if (!out.includes(s)) out.push(s);
+      return out;
+    }, [customStatuses]);
+
+    const seriesMap = useMemo(() => new Map(seriesMeta.map((s) => [s.name, s])), [seriesMeta]);
+    const seriesNames = useMemo(() => {
+      const set = new Set(seriesMeta.map((s) => s.name));
+      for (const it of items) if (it.series) set.add(it.series);
+      return Array.from(set).sort((a, b) => a.localeCompare(b, "th"));
+    }, [seriesMeta, items]);
+    const assignees = useMemo(() => Array.from(new Set(items.map((x) => x.assignee).filter(Boolean))).sort((a, b) => a.localeCompare(b, "th")), [items]);
+
+    const counts = useMemo(() => {
+      const m = new Map(statuses.map((s) => [s, 0]));
+      for (const it of items) m.set(it.status, (m.get(it.status) || 0) + 1);
+      return m;
+    }, [items, statuses]);
+
+    const filtered = useMemo(() => {
+      const q = filters.q.trim().toLowerCase();
+      return items
+        .filter((it) => filters.series === ALL || it.series === filters.series)
+        .filter((it) => filters.status === ALL || it.status === filters.status)
+        .filter((it) => !q || [it.series, it.episode, it.status, it.assignee].join(" ").toLowerCase().includes(q));
+    }, [items, filters]);
+
+    const groups = useMemo(() => {
+      const m = new Map();
+      for (const it of filtered) {
+        if (!m.has(it.series)) m.set(it.series, []);
+        m.get(it.series).push(it);
+      }
+      for (const arr of m.values()) arr.sort((a, b) => cmpEp(a.episode, b.episode));
+      return Array.from(m.entries()).sort((a, b) => a[0].localeCompare(b[0], "th"));
+    }, [filtered]);
+
+    const seriesStats = useMemo(() => {
+      const m = new Map();
+      for (const it of items) {
+        const s = m.get(it.series) || { total: 0, done: 0 };
+        s.total++; if (DONE.has(it.status)) s.done++;
+        m.set(it.series, s);
+      }
+      return m;
+    }, [items]);
+
+    const total = items.length;
+    const done = items.filter((x) => DONE.has(x.status)).length;
+    const pct = total ? Math.round((done / total) * 100) : 0;
+    const canEdit = conn === "online" && !readOnly;
+
+    // ---- writes ----
+    async function run(fn, okMsg) {
+      try {
+        await fn();
+        if (okMsg) say(okMsg);
+        return true;
+      } catch (e) {
+        if (e && e.code === "invalid_argument") setReadOnly(true);
+        say(errText(e));
+        return false;
+      }
+    }
+    const stamp = () => ({ updatedAt: Date.now(), updatedBy: myId || null });
+
+    async function addItem() {
+      const series = form.series.trim(), episode = form.episode.trim();
+      if (!series || !episode) { say("เลือกเรื่องและกรอกตอนที่ก่อน"); return; }
+      const ok = await run(() => db.collection("items").add({
+        series, episode, status: form.status, assignee: form.assignee.trim(), ...stamp(),
+      }), `เพิ่ม ${series} EP.${episode} แล้ว`);
+      if (ok) {
+        const n = Number(episode);
+        setForm((f) => ({ ...f, episode: Number.isInteger(n) ? String(n + 1) : "", status: statuses[0] }));
+        epRef.current && epRef.current.focus();
+      }
+    }
+    const updateItem = (id, patch) => run(() => db.doc("items/" + id).update({ ...patch, ...stamp() }));
+    const removeItem = (id) => run(() => db.doc("items/" + id).delete(), "ลบงานแล้ว");
+    const duplicateItem = (it) => {
+      const { id, ...rest } = it;
+      return run(() => db.collection("items").add({ ...rest, ...stamp() }), "คัดลอกแล้ว");
+    };
+
+    async function saveNewSeries() {
+      const name = (newSeries.name || "").trim();
+      if (!name) { say("กรอกชื่อเรื่องก่อน"); return; }
+      if (seriesMap.has(name)) { say("มีเรื่องชื่อนี้แล้ว"); return; }
+      const ok = await run(() => db.collection("series").add({ name, icon: (newSeries.icon || "").trim() }), `เพิ่มเรื่อง ${name} แล้ว`);
+      if (ok) { setForm((f) => ({ ...f, series: name })); setNewSeries(null); }
+    }
+    async function saveSeries(s, rawName, rawIcon) {
+      const name = rawName.trim(), icon = rawIcon.trim();
+      if (!name) { say("กรอกชื่อเรื่องก่อน"); return false; }
+      if (name !== s.name && seriesMap.has(name)) { say("มีเรื่องชื่อนี้แล้ว"); return false; }
+      return run(async () => {
+        await db.doc("series/" + s.id).set({ name, icon });
+        if (name !== s.name) {
+          setBusy("กำลังเปลี่ยนชื่อเรื่องในทุกตอน…");
+          try {
+            for (const it of items.filter((x) => x.series === s.name)) {
+              await db.doc("items/" + it.id).update({ series: name });
+            }
+          } finally { setBusy(""); }
+          setForm((f) => (f.series === s.name ? { ...f, series: name } : f));
+          setFilters((f) => (f.series === s.name ? { ...f, series: name } : f));
+        }
+      }, "บันทึกเรื่องแล้ว");
+    }
+    const removeSeries = (s) => run(() => db.doc("series/" + s.id).delete(), `ลบเรื่อง ${s.name} ออกจากรายการแล้ว`);
+
+    async function addStatus() {
+      const name = newStatus.trim();
+      if (!name) return;
+      if (statuses.includes(name)) { say("มีสถานะนี้แล้ว"); return; }
+      const ok = await run(() => db.doc("config/statuses").set({ custom: [...customStatuses, name] }), `เพิ่มสถานะ “${name}” แล้ว`);
+      if (ok) setNewStatus("");
+    }
+    const removeStatus = (name) => run(() => db.doc("config/statuses").set({ custom: customStatuses.filter((x) => x !== name) }), "ลบสถานะแล้ว");
+
+    async function exportJSON() {
+      const downloads = await capability("downloads");
+      if (!downloads) { say("หน้านี้ดาวน์โหลดไฟล์ไม่ได้ในมุมมองนี้"); return; }
+      const data = {
+        items: items.map(({ id, updatedBy, ...rest }) => ({ id, ...rest, lastUpdated: rest.updatedAt })),
+        statuses,
+        seriesMeta: seriesMeta.map(({ id, name, icon }) => ({ id, name, icon })),
+      };
+      try {
+        const r = await downloads.save({
+          filename: `content-tracker-${new Date().toISOString().slice(0, 10)}.json`,
+          data: JSON.stringify(data, null, 2),
+        });
+        if (r && r.status === "saved") say("บันทึกไฟล์แล้ว");
+      } catch (e) {
+        if (!e || e.code !== "declined") say("บันทึกไฟล์ไม่สำเร็จ");
+      }
+    }
+
+    function onImport(e) {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = "";
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = async () => {
+        let data;
+        try { data = JSON.parse(String(reader.result)); } catch { say("ไฟล์นี้ไม่ใช่ JSON ที่ถูกต้อง"); return; }
+        const inItems = Array.isArray(data && data.items) ? data.items : [];
+        const inSeries = Array.isArray(data && data.seriesMeta) ? data.seriesMeta : [];
+        const inStatuses = Array.isArray(data && data.statuses) ? data.statuses : [];
+        const existing = new Set(items.map((x) => `${x.series}|${x.episode}`));
+        const fresh = inItems.filter((x) => x && x.series && x.episode != null && !existing.has(`${x.series}|${x.episode}`));
+        let added = 0;
+        setBusy("กำลังนำเข้า…");
+        const ok = await run(async () => {
+          const extra = inStatuses.filter((s) => typeof s === "string" && !statuses.includes(s));
+          if (extra.length) await db.doc("config/statuses").set({ custom: [...customStatuses, ...extra] });
+          const known = new Set(seriesMeta.map((s) => s.name));
+          const wanted = [...inSeries.filter((s) => s && s.name), ...fresh.map((x) => ({ name: x.series }))];
+          for (const s of wanted) {
+            const name = String(s.name).trim();
+            if (!name || known.has(name)) continue;
+            known.add(name);
+            const icon = typeof s.icon === "string" && !/^(https?:|data:)/.test(s.icon) ? s.icon : "";
+            await db.collection("series").add({ name, icon });
+          }
+          for (const x of fresh) {
+            await db.collection("items").add({
+              series: String(x.series), episode: String(x.episode),
+              status: typeof x.status === "string" ? x.status : statuses[0],
+              assignee: typeof x.assignee === "string" ? x.assignee : "",
+              updatedAt: Number(x.lastUpdated || x.updatedAt) || Date.now(),
+              updatedBy: myId || null,
+            });
+            added++;
+            setBusy(`กำลังนำเข้า… ${added}/${fresh.length}`);
+          }
+        });
+        setBusy("");
+        if (ok) {
+          const skipped = inItems.length - fresh.length;
+          say(`นำเข้า ${added} งาน` + (skipped ? ` (ข้าม ${skipped} งานที่มีอยู่แล้ว)` : ""));
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function startEpisodeFor(name) {
+      setForm((f) => ({ ...f, series: name }));
+      formRef.current && formRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      setTimeout(() => epRef.current && epRef.current.focus(), 250);
+    }
+
+    const filtersActive = filters.q || filters.series !== ALL || filters.status !== ALL;
+    const syncLabel = conn === "online" ? "ออนไลน์ · ทุกคนเห็นข้อมูลเดียวกัน" : conn === "loading" ? "กำลังเชื่อมต่อ…" : "ไม่ได้เชื่อมต่อ";
+
+    return html`<div class="wrap">
+      <datalist id="assignee-list">${assignees.map((a) => html`<option key=${a} value=${a} />`)}</datalist>
+
+      <header class="top">
+        <div class="top-text">
+          <h1>บอร์ดงานคลิปช่อง</h1>
+          <span class="sync"><span class=${"dot " + (conn === "online" ? "on" : conn === "offline" ? "off" : "")}></span>${syncLabel}</span>
+        </div>
+        <div class="progress" aria-label="ความคืบหน้า">
+          <div class="progress-row">
+            <span class="progress-big">${pct}%</span>
+            <span class="muted small num">เสร็จ ${done} / ${total} ตอน</span>
+          </div>
+          <div class="bar"><i style=${{ width: pct + "%" }}></i></div>
+        </div>
+      </header>
+
+      ${conn === "offline" ? html`<div class="notice warn">
+        เปิดหน้านี้ผ่านลิงก์ claude.ai และเข้าสู่ระบบก่อน ข้อมูลของทีมจึงจะโหลดและบันทึกได้
+      </div>` : null}
+      ${conn === "online" && readOnly ? html`<div class="notice">
+        คุณดูได้อย่างเดียว ถ้าต้องการแก้ไข ขอให้เจ้าของหน้าแชร์ให้คุณในระดับ Contributor
+      </div>` : null}
+      ${busy ? html`<div class="notice">${busy}</div>` : null}
+
+      <nav class="stages" aria-label="จำนวนงานตามสถานะ">
+        ${statuses.map((s) => html`<button key=${s} class="stage" aria-pressed=${filters.status === s ? "true" : "false"}
+            onClick=${() => setFilters((f) => ({ ...f, status: f.status === s ? ALL : s }))}>
+          ${s}<span class=${"n t-" + tone(s)}>${counts.get(s) || 0}</span>
+        </button>`)}
+      </nav>
+
+      <div class="grid">
+        <div class="field">
+          <label for="f-q">ค้นหา</label>
+          <input id="f-q" type="search" placeholder="เรื่อง ตอน สถานะ หรือชื่อคนทำ" value=${filters.q}
+            onChange=${(e) => setFilters((f) => ({ ...f, q: e.target.value }))} />
+        </div>
+        <div class="field">
+          <label for="f-series">เรื่อง</label>
+          <select id="f-series" value=${filters.series} onChange=${(e) => setFilters((f) => ({ ...f, series: e.target.value }))}>
+            ${[ALL, ...seriesNames].map((s) => html`<option key=${s} value=${s}>${s}</option>`)}
+          </select>
+        </div>
+        <div class="field">
+          <label for="f-status">สถานะ</label>
+          <select id="f-status" value=${filters.status} onChange=${(e) => setFilters((f) => ({ ...f, status: e.target.value }))}>
+            ${[ALL, ...statuses].map((s) => html`<option key=${s} value=${s}>${s}</option>`)}
+          </select>
+        </div>
+        ${filtersActive ? html`<button class="btn" onClick=${() => setFilters({ q: "", series: ALL, status: ALL })}>ล้างตัวกรอง</button>` : null}
+      </div>
+
+      ${canEdit ? html`<section class="card" ref=${formRef} aria-label="เพิ่มงาน">
+        <h2>เพิ่มงานตอนใหม่</h2>
+        <div class="grid">
+          <div class="field">
+            <label for="a-series">เรื่อง</label>
+            <select id="a-series" value=${form.series} onChange=${(e) => {
+              const v = e.target.value;
+              if (v === "__add__") setNewSeries({ name: "", icon: "" });
+              else setForm((f) => ({ ...f, series: v }));
+            }}>
+              <option value="">เลือกเรื่อง</option>
+              ${seriesNames.map((s) => html`<option key=${s} value=${s}>${s}</option>`)}
+              <option value="__add__">+ เพิ่มเรื่องใหม่…</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="a-ep">ตอนที่</label>
+            <input id="a-ep" ref=${epRef} type="text" inputMode="numeric" placeholder="เช่น 12" value=${form.episode}
+              onChange=${(e) => setForm((f) => ({ ...f, episode: e.target.value }))}
+              onKeyDown=${(e) => { if (e.key === "Enter") addItem(); }} />
+          </div>
+          <div class="field">
+            <label for="a-who">ผู้รับผิดชอบ</label>
+            <input id="a-who" type="text" list="assignee-list" placeholder="ไม่บังคับ" value=${form.assignee}
+              onChange=${(e) => setForm((f) => ({ ...f, assignee: e.target.value }))}
+              onKeyDown=${(e) => { if (e.key === "Enter") addItem(); }} />
+          </div>
+          <div class="field">
+            <label for="a-status">สถานะเริ่มต้น</label>
+            <select id="a-status" value=${form.status} onChange=${(e) => setForm((f) => ({ ...f, status: e.target.value }))}>
+              ${statuses.map((s) => html`<option key=${s} value=${s}>${s}</option>`)}
+            </select>
+          </div>
+          <button class="btn primary" onClick=${addItem}>เพิ่มงาน</button>
+        </div>
+        ${newSeries ? html`<div class="list-item">
+          <input id="ns-name" type="text" placeholder="ชื่อเรื่องใหม่" value=${newSeries.name} autoFocus
+            onChange=${(e) => setNewSeries((s) => ({ ...s, name: e.target.value }))}
+            onKeyDown=${(e) => { if (e.key === "Enter") saveNewSeries(); }} />
+          <input id="ns-icon" type="text" placeholder="emoji เช่น 🧪" value=${newSeries.icon} style=${{ flex: "0 1 120px" }}
+            onChange=${(e) => setNewSeries((s) => ({ ...s, icon: e.target.value }))} />
+          <button class="btn sm primary" onClick=${saveNewSeries}>บันทึกเรื่อง</button>
+          <button class="btn sm" onClick=${() => setNewSeries(null)}>ยกเลิก</button>
+        </div>` : null}
+      </section>` : null}
+
+      ${conn === "loading" ? html`<div class="group"><div class="empty">กำลังโหลดงานของทีม…</div></div>` : null}
+      ${conn === "online" && items.length === 0 ? html`<div class="group"><div class="empty">
+        <strong>ยังไม่มีงานบนบอร์ด</strong>
+        <span>เลือกเรื่องและกรอกตอนที่ในช่องด้านบนเพื่อเพิ่มงานแรก หรือนำเข้าไฟล์ JSON จากเวอร์ชันเดิมที่ส่วน “นำเข้า / ส่งออก” ด้านล่าง</span>
+      </div></div>` : null}
+      ${conn === "online" && items.length > 0 && groups.length === 0 ? html`<div class="group"><div class="empty">
+        <strong>ไม่พบงานที่ตรงกับตัวกรอง</strong>
+        <button class="btn" onClick=${() => setFilters({ q: "", series: ALL, status: ALL })}>ล้างตัวกรอง</button>
+      </div></div>` : null}
+
+      ${groups.map(([name, arr]) => {
+        const st = seriesStats.get(name) || { total: 0, done: 0 };
+        const p = st.total ? Math.round((st.done / st.total) * 100) : 0;
+        return html`<section key=${name} class="group">
+          <div class="group-head">
+            <span class="icon">${(seriesMap.get(name) || {}).icon || "·"}</span>
+            <h3>${name}</h3>
+            <span class="mini"><span class="bar"><i style=${{ width: p + "%" }}></i></span><span class="num">${st.done}/${st.total}</span></span>
+            ${canEdit ? html`<button class="btn sm" onClick=${() => startEpisodeFor(name)}>+ เพิ่มตอน</button>` : null}
+          </div>
+          <div class="scroll">
+            <table>
+              <thead><tr><th>ตอน</th><th>สถานะ</th><th>ผู้รับผิดชอบ</th><th>อัปเดตล่าสุด</th><th></th></tr></thead>
+              <tbody>
+                ${arr.map((it) => html`<${Row} key=${it.id} it=${it} statuses=${statuses} names=${names} readOnly=${!canEdit}
+                  onUpdate=${updateItem} onDuplicate=${duplicateItem} onRemove=${removeItem} />`)}
+              </tbody>
+            </table>
+          </div>
+        </section>`;
+      })}
+
+      <details class="card">
+        <summary><h2>จัดการเรื่อง</h2></summary>
+        <div class="list">
+          ${seriesMeta.length === 0 ? html`<span class="muted small">ยังไม่มีเรื่อง เพิ่มได้จากช่อง “เรื่อง” ในฟอร์มเพิ่มงาน</span>` : null}
+          ${[...seriesMeta].sort((a, b) => a.name.localeCompare(b.name, "th")).map((s) => html`<${SeriesRow} key=${s.id} s=${s}
+            count=${(seriesStats.get(s.name) || { total: 0 }).total} readOnly=${!canEdit}
+            onSave=${saveSeries} onRemove=${removeSeries} />`)}
+        </div>
+      </details>
+
+      <details class="card">
+        <summary><h2>จัดการสถานะ</h2></summary>
+        <div class="chips">
+          ${statuses.map((s) => html`<span key=${s} class=${"chip t-" + tone(s)}>${s}
+            ${DEFAULT_STATUSES.includes(s) || !canEdit ? null : html`<button class="linkbtn danger" aria-label=${"ลบสถานะ " + s} onClick=${() => removeStatus(s)}>×</button>`}
+          </span>`)}
+        </div>
+        ${canEdit ? html`<div class="row-btns" style=${{ marginTop: "12px" }}>
+          <input id="new-status" type="text" placeholder="สถานะใหม่ เช่น รอตรวจสะกด" value=${newStatus} style=${{ maxWidth: "280px" }}
+            onChange=${(e) => setNewStatus(e.target.value)} onKeyDown=${(e) => { if (e.key === "Enter") addStatus(); }} />
+          <button class="btn" onClick=${addStatus}>เพิ่มสถานะ</button>
+        </div>` : null}
+        <p class="muted small" style=${{ margin: "12px 0 0" }}>นับว่าเสร็จเมื่อสถานะเป็น “ใส่ภาพเสร็จแล้ว” หรือ “เสร็จสิ้น” · สถานะพื้นฐานลบไม่ได้</p>
+      </details>
+
+      <details class="card">
+        <summary><h2>นำเข้า / ส่งออก</h2></summary>
+        <p class="muted small" style=${{ margin: "0 0 12px" }}>นำเข้าไฟล์ JSON ที่ส่งออกจากเวอร์ชันเดิมได้เลย ตอนที่มีอยู่แล้ว (เรื่องและตอนเดียวกัน) จะถูกข้ามไป</p>
+        <div class="row-btns">
+          <button class="btn" onClick=${exportJSON} disabled=${conn !== "online"}>ส่งออก JSON</button>
+          ${canEdit ? html`<button class="btn" disabled=${!!busy} onClick=${() => fileRef.current && fileRef.current.click()}>นำเข้า JSON</button>` : null}
+          <input ref=${fileRef} id="import-file" type="file" accept="application/json,.json" hidden onChange=${onImport} />
+        </div>
+      </details>
+
+      ${toast ? html`<div class="toast" role="status">${toast}</div>` : null}
+    </div>`;
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")).render(html`<${App} />`);
+})();
+</script>
