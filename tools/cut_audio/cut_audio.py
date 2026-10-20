@@ -699,7 +699,8 @@ def fmt(t):
     return f"{int(t // 3600):02d}:{int(t % 3600 // 60):02d}:{t % 60:06.3f}"
 
 # ---------------------------------------------------------------- main
-AUDIO_EXT = (".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg")  # ไม่รวมวิดีโอ (.mp4) กันไปหยิบคลิปที่ทำเสร็จแล้ว
+AUDIO_EXT = (".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".wma", ".opus")  # ไม่รวมวิดีโอ (.mp4) กันไปหยิบคลิปที่ทำเสร็จแล้ว
+VIDEO_EXT = (".mp4", ".mov", ".mkv", ".webm")  # รับเฉพาะเมื่อลากไฟล์นั้นมาเอง (ไม่หยิบจากโฟลเดอร์)
 DONE_TAG = "(ตัดเสียงแล้ว)"
 DONE_RE = re.compile(r"\(\s*ตัด.*แล้ว\s*\)")  # จับชื่อที่สะกดต่างกันได้ด้วย เช่น "(ตัดเสีบงแล้ว)"
 
@@ -707,19 +708,31 @@ def expand_inputs(items, recursive=False):
     """รับไฟล์ / โฟลเดอร์ / wildcard (*.mp3) แล้วคืนรายการไฟล์เสียงดิบ (ข้ามไฟล์ที่ตัดแล้ว)"""
     files = []
     for it in items:
+        it = it.strip().strip('"')
         if os.path.isdir(it):
-            pat = os.path.join(it, "**", "*") if recursive else os.path.join(it, "*")
+            # glob.escape: ชื่อโฟลเดอร์ที่มี [ ] เช่น "คซ [323]" ไม่ให้ถูกตีความเป็น wildcard
+            pat = os.path.join(glob.escape(it), "**", "*") if recursive else os.path.join(glob.escape(it), "*")
             cand = sorted(glob.glob(pat, recursive=recursive))
+            if not any(f.lower().endswith(AUDIO_EXT) for f in cand):
+                print("ไม่มีไฟล์เสียงในโฟลเดอร์:", it)
+        elif os.path.exists(it):  # ไฟล์ที่ลากมาเอง (ชื่อมี [ ] ก็ใช้ได้)
+            cand = [it]
+            if not it.lower().endswith(AUDIO_EXT + VIDEO_EXT):
+                print(f"ข้าม (ไม่ใช่ไฟล์เสียงที่รองรับ {', '.join(AUDIO_EXT + VIDEO_EXT)}):", it)
+            elif DONE_RE.search(os.path.basename(it)):
+                print("ข้าม (เป็นไฟล์ที่ตัดเสียงแล้ว):", it)
         elif any(ch in it for ch in "*?["):
             cand = sorted(glob.glob(it, recursive=recursive))
+            if not cand:
+                print("ไม่พบไฟล์ที่ตรงกับ:", it)
         else:
-            cand = [it]
+            cand = []
+            print("ไม่พบไฟล์:", it)
         for f in cand:
-            if os.path.isfile(f) and f.lower().endswith(AUDIO_EXT) and not DONE_RE.search(os.path.basename(f)):
+            ext_ok = f.lower().endswith(AUDIO_EXT) or (f == it and f.lower().endswith(VIDEO_EXT))
+            if os.path.isfile(f) and ext_ok and not DONE_RE.search(os.path.basename(f)):
                 if os.path.abspath(f) not in map(os.path.abspath, files):
                     files.append(f)
-            elif f == it and not os.path.exists(f):
-                print("ไม่พบไฟล์:", f)
     return files
 
 def output_path(src, out_dir=None):
@@ -835,6 +848,7 @@ def main():
         print("ใช้บท:", ", ".join(os.path.basename(p) for p in a.script))
     files = expand_inputs(a.inputs, a.recursive)
     if not files:
+        print("ไฟล์ที่ได้รับ:", *(a.inputs or ["(ไม่มี มีแต่ไฟล์บท .txt)"]), sep="\n  ")
         sys.exit("ไม่พบไฟล์เสียงดิบ")
     if a.output and len(files) > 1:
         sys.exit("-o ใช้ได้เมื่อมีไฟล์เดียว ถ้าหลายไฟล์ให้ใช้ --out-dir")
