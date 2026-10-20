@@ -568,11 +568,16 @@ def keep_segments(n_frames, vs, e, cuts, max_pause=0.9, head=0.25, tail=0.2, U=N
         # ขยับจุดตัดไปเฟรมที่เสียงเบาที่สุดในระยะ ±3 เฟรม ลดเสียงคลิก
         # แต่ขยายออกนอกท่อนได้เฉพาะเฟรมที่ไม่ได้ถูกตัด (เดิมดึงเสียงเทคผิดกลับมา 20-60 ms ติดอยู่ที่รอยต่อ)
         # และไม่ให้ทับกับท่อนก่อนหน้า (เสียงซ้ำ)
-        fa = list(range(a, min(a + 4, b)))
+        # หดเข้าในท่อนได้เฉพาะเฟรมที่ไม่ใช่เสียงพูด (ไม่ตัดหัว/ท้ายคำที่เก็บไว้)
+        fa, k = [a], a
+        while k < min(a + 3, b - 1) and not vs[k]:
+            k += 1; fa.append(k)
         k = a - 1
         while a > 0 and k >= max(a - 3, last) and not cut[k]:
             fa.append(k); k -= 1
-        fb = list(range(max(a + 1, b - 3), b + 1))
+        fb, k = [b], b
+        while k > max(b - 3, a + 1) and not vs[k - 1]:
+            k -= 1; fb.append(k)
         k = b
         while b < n_frames and k < min(b + 3, n_frames) and not cut[k]:
             k += 1; fb.append(k)
